@@ -20,7 +20,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'j8=d-up9+!*e1nk58nimjcx6u7k&h@+@at-k91(3nn2@w4!3y-'
+SECRET_KEY = '-fnx892hx++8!+s7z^5%=ej+)^yc-)skfib)8&eo2$bp!^up%q'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -75,13 +75,9 @@ WSGI_APPLICATION = 'AAS.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql', # 数据库引擎
-        'HOST': '127.0.0.1', # 数据库主机
-        'PORT': 3306, # 数据库端口
-        'USER': 'rh', # 数据库用户名
-        'PASSWORD': '123456', # 数据库用户密码
-        'NAME': 'AAS' # 数据库名字
-    },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
 }
 
 
