@@ -170,7 +170,6 @@ class LoginView(View):
 class ForgetPasswordView(View):
 
     def get(self, request):
-
         return render(request, 'forget_password.html')
 
     def post(self, request):
@@ -178,10 +177,11 @@ class ForgetPasswordView(View):
         mobile = request.POST.get('mobile')
         password = request.POST.get('password')
         password2 = request.POST.get('password2')
-        smscode = request.POST.get('sms_code')
+        image_code = request.POST.get('image_code')
+        uuid = request.POST.get('uuid')
 
         # 判断参数是否齐全
-        if not all([mobile, password, password2, smscode]):
+        if not all([mobile, password, password2, image_code, uuid]):
             return HttpResponseBadRequest('缺少必传参数')
 
         # 判断手机号是否合法
@@ -196,13 +196,13 @@ class ForgetPasswordView(View):
         if password != password2:
             return HttpResponseBadRequest('两次输入的密码不一致')
 
-        # 验证短信验证码
+        # 验证图片验证码
         redis_conn = get_redis_connection('default')
-        sms_code_server = redis_conn.get('sms:%s' % mobile)
-        if sms_code_server is None:
-            return HttpResponseBadRequest('短信验证码已过期')
-        if smscode != sms_code_server.decode():
-            return HttpResponseBadRequest('短信验证码错误')
+        image_code_server = redis_conn.get('img:%s' % uuid)
+        if image_code_server is None:
+            return HttpResponseBadRequest('图片验证码已过期')
+        if image_code.lower() != image_code_server.decode().lower():
+            return HttpResponseBadRequest('图片验证码错误')
 
         # 根据手机号查询数据
         try:
@@ -222,4 +222,3 @@ class ForgetPasswordView(View):
         response = redirect(reverse('users:login'))
 
         return response
-

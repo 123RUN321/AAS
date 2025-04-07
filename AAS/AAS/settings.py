@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     #子应用的注册
     'users.apps.UsersConfig',
+    'home.apps.HomeConfig'
 ]
 
 MIDDLEWARE = [
@@ -193,3 +194,12 @@ LOGGING = {
 #替换系统的User使用自己的User
 #配置信息为'子应用名.模型类名'
 AUTH_USER_MODEL = 'users.User'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# settings.py
+CSRF_USE_SESSIONS = False  # 确保使用cookie而不是session
+CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript读取
+CORS_ALLOW_CREDENTIALS = True  #
+
+DEEPSEEK_API_KEY = "sk-3f99196f01bb4c669cd0c82f6efc4974"
