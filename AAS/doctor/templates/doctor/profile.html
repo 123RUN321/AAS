@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>个人资料 - 主动脉辅助诊断系统</title>
+    <!-- 使用Tailwind CSS的Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 图标 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        input, select, textarea {
+            transition: all 0.3s ease;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        .nav-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .empty-value {
+            color: #9ca3af;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <a href="{% url 'doctor:index' %}" class="flex items-center text-xl font-bold hover:text-blue-200 transition">
+                    主动脉辅助诊断系统
+                </a>
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="{% url 'doctor:nrrd_viewer' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-upload mr-1"></i>影像上传
+                    </a>
+                    <a href="{% url 'doctor:index' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-heartbeat mr-1"></i>AI诊断
+                    </a>
+                    <a href="{% url 'doctor:ai_chat' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-comments mr-1"></i>AI问答
+                    </a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'doctor:profile' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-user-circle mr-1"></i>{{ request.user.mobile }}
+                    </a>
+                    <a href="{% url 'users:logout' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i>退出
+                    </a>
+                {% else %}
+                    <a href="{% url 'users:login' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-in-alt mr-1"></i>登录
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <!-- 用户头像和信息头部 -->
+            <div class="bg-blue-600 text-white p-6">
+                <div class="flex items-center">
+                    {% if user.avatar %}
+                        <img src="{{ user.avatar.url }}" alt="头像" class="w-20 h-20 rounded-full object-cover border-4 border-white">
+                    {% else %}
+                        <div class="w-20 h-20 rounded-full bg-blue-400 flex items-center justify-center text-3xl font-bold border-4 border-white">
+                            {{ user.mobile|slice:":1" }}
+                        </div>
+                    {% endif %}
+                    <div class="ml-6">
+                        <h1 class="text-2xl font-bold">{{ user.last_name }}{{ user.first_name }}</h1>
+                        <p class="text-blue-100">{{ user.user_desc|default:"暂无个人简介" }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 资料编辑表单 -->
+            <form id="profile-form" class="p-6">
+                {% csrf_token %}
+
+                <!-- 基本信息部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-user-circle mr-2"></i>基本信息
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-2">用户名</label>
+                            <input type="text" name="username" value="{{ user.username }}" class="w-full px-4 py-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">个人简介</label>
+                            <input type="text" name="user_desc" value="{{ user.user_desc|default:'' }}" class="w-full px-4 py-2 border rounded-lg" placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">姓</label>
+                            <input type="text" name="last_name" value="{{ user.last_name|default:'' }}" class="w-full px-4 py-2 border rounded-lg" placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">名</label>
+                            <input type="text" name="first_name" value="{{ user.first_name|default:'' }}" class="w-full px-4 py-2 border rounded-lg" placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">性别</label>
+                            <select name="gender" class="w-full px-4 py-2 border rounded-lg">
+                                <option value="">请选择</option>
+                                <option value="M" {% if user.gender == 'M' %}selected{% endif %}>男性</option>
+                                <option value="F" {% if user.gender == 'F' %}selected{% endif %}>女性</option>
+                                <option value="O" {% if user.gender == 'O' %}selected{% endif %}>其他</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">出生日期</label>
+                            <input type="date" name="birth_date" value="{{ user.birth_date|date:'Y-m-d' }}" class="w-full px-4 py-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">年龄</label>
+                            <input type="text" value="{{ user.age|default:'未填写' }}" class="w-full px-4 py-2 border rounded-lg bg-gray-100" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 身体指标部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-heartbeat mr-2"></i>身体指标
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-2">身高 (cm)</label>
+                            <input type="number" step="0.1" name="height"
+                                   value="{{ user.patient_profile.height|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">体重 (kg)</label>
+                            <input type="number" step="0.1" name="weight"
+                                   value="{{ user.patient_profile.weight|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">BMI</label>
+                            <input type="text" value="{{ user.patient_profile.bmi|default:'未计算' }}"
+                                   class="w-full px-4 py-2 border rounded-lg bg-gray-100" readonly>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">血型</label>
+                            <select name="blood_type" class="w-full px-4 py-2 border rounded-lg">
+                                <option value="">请选择</option>
+                                <option value="A" {% if user.patient_profile.blood_type == 'A' %}selected{% endif %}>A型</option>
+                                <option value="B" {% if user.patient_profile.blood_type == 'B' %}selected{% endif %}>B型</option>
+                                <option value="AB" {% if user.patient_profile.blood_type == 'AB' %}selected{% endif %}>AB型</option>
+                                <option value="O" {% if user.patient_profile.blood_type == 'O' %}selected{% endif %}>O型</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 血压血糖部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-tint mr-2"></i>血压血糖
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-2">血压 (高压)</label>
+                            <input type="number" name="blood_pressure_high"
+                                   value="{{ user.patient_profile.blood_pressure_high|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">血压 (低压)</label>
+                            <input type="number" name="blood_pressure_low"
+                                   value="{{ user.patient_profile.blood_pressure_low|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">血糖 (mmol/L)</label>
+                            <input type="number" step="0.1" name="blood_sugar"
+                                   value="{{ user.patient_profile.blood_sugar|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">胆固醇 (mmol/L)</label>
+                            <input type="number" step="0.1" name="cholesterol"
+                                   value="{{ user.patient_profile.cholesterol|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 健康习惯部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-running mr-2"></i>健康习惯
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="is_smoker" name="is_smoker"
+                                   {% if user.patient_profile.is_smoker %}checked{% endif %} class="mr-2">
+                            <label for="is_smoker" class="text-gray-700">吸烟</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="is_drinker" name="is_drinker"
+                                   {% if user.patient_profile.is_drinker %}checked{% endif %} class="mr-2">
+                            <label for="is_drinker" class="text-gray-700">饮酒</label>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-gray-700 mb-2">锻炼频率</label>
+                            <select name="exercise_frequency" class="w-full px-4 py-2 border rounded-lg">
+                                <option value="">请选择</option>
+                                <option value="never" {% if user.patient_profile.exercise_frequency == 'never' %}selected{% endif %}>从不</option>
+                                <option value="rarely" {% if user.patient_profile.exercise_frequency == 'rarely' %}selected{% endif %}>很少</option>
+                                <option value="sometimes" {% if user.patient_profile.exercise_frequency == 'sometimes' %}selected{% endif %}>有时</option>
+                                <option value="often" {% if user.patient_profile.exercise_frequency == 'often' %}selected{% endif %}>经常</option>
+                                <option value="daily" {% if user.patient_profile.exercise_frequency == 'daily' %}selected{% endif %}>每天</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 医疗信息部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-notes-medical mr-2"></i>医疗信息
+                    </h2>
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-2">过敏史</label>
+                            <textarea name="allergies" class="w-full px-4 py-2 border rounded-lg h-24" placeholder="未填写">{{ user.patient_profile.allergies|default:'' }}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">病史</label>
+                            <textarea name="medical_history" class="w-full px-4 py-2 border rounded-lg h-24" placeholder="未填写">{{ user.patient_profile.medical_history|default:'' }}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">当前用药</label>
+                            <textarea name="current_medications" class="w-full px-4 py-2 border rounded-lg h-24" placeholder="未填写">{{ user.patient_profile.current_medications|default:'' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 紧急联系人部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-phone-alt mr-2"></i>紧急联系人
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-2">姓名</label>
+                            <input type="text" name="emergency_contact_name"
+                                   value="{{ user.patient_profile.emergency_contact_name|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">电话</label>
+                            <input type="text" name="emergency_contact_phone"
+                                   value="{{ user.patient_profile.emergency_contact_phone|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-2">关系</label>
+                            <input type="text" name="emergency_contact_relation"
+                                   value="{{ user.patient_profile.emergency_contact_relation|default:'' }}"
+                                   class="w-full px-4 py-2 border rounded-lg"
+                                   placeholder="未填写">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 健康目标部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-bullseye mr-2"></i>健康目标
+                    </h2>
+                    <div>
+                        <textarea name="health_goal" class="w-full px-4 py-2 border rounded-lg h-24" placeholder="未填写">{{ user.patient_profile.health_goal|default:'' }}</textarea>
+                    </div>
+                </div>
+
+                <!-- 主治医生部分 -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">
+                        <i class="fas fa-user-md mr-2"></i>主治医生
+                    </h2>
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <label class="block text-gray-700 mb-2">选择主治医生</label>
+                            <select name="assigned_doctor" class="w-full px-4 py-2 border rounded-lg">
+                                <option value="">-- 请选择主治医生 --</option>
+                                {% for doctor in doctors %}
+                                <option value="{{ doctor.user.id }}"
+                                    {% if user.patient_profile.assigned_doctor and doctor.user.id == user.patient_profile.assigned_doctor.id %}selected{% endif %}>
+                                    {{ doctor.user.last_name }}{{ doctor.user.first_name }} - {{ doctor.department }} - {{ doctor.title }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% if user.patient_profile.assigned_doctor %}
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h3 class="font-semibold text-blue-800">当前主治医生信息</h3>
+                            <p class="text-gray-700">
+                                {{ user.patient_profile.assigned_doctor.last_name }}{{ user.patient_profile.assigned_doctor.first_name }}
+                                - {{ user.patient_profile.assigned_doctor.doctor_profile.department }}
+                                - {{ user.patient_profile.assigned_doctor.doctor_profile.title }}
+                            </p>
+                            <p class="text-gray-600 mt-1">
+                                <i class="fas fa-phone-alt mr-2"></i>{{ user.patient_profile.assigned_doctor.mobile }}
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 提交按钮 -->
+                <div class="flex justify-center mt-8">
+                    <button type="submit" class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300">
+                        <i class="fas fa-save mr-2"></i>保存修改
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-6 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>Copyright &copy; 2023 主动脉辅助诊断系统</p>
+        </div>
+    </footer>
+
+    <script>
+    $(document).ready(function() {
+        $('#profile-form').submit(function(e) {
+            e.preventDefault();
+
+            // 显示加载状态
+            const submitBtn = $(this).find('button[type="submit"]');
+            submitBtn.prop('disabled', true);
+            submitBtn.html('<i class="fas fa-spinner fa-spin mr-2"></i>保存中...');
+
+            // 收集表单数据
+            var formData = $(this).serialize();
+
+            $.ajax({
+                url: window.location.pathname,
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    if (response.code === '200') {
+                        alert('修改成功');
+                        // 可以添加页面刷新或其他操作
+                        window.location.reload();
+                    } else {
+                        alert('错误: ' + response.errmsg);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('请求失败: ' + error);
+                },
+                complete: function() {
+                    submitBtn.prop('disabled', false);
+                    submitBtn.html('<i class="fas fa-save mr-2"></i>保存修改');
+                }
+            });
+        });
+
+        // 自动计算BMI
+        $('input[name="height"], input[name="weight"]').on('change', function() {
+            const height = parseFloat($('input[name="height"]').val());
+            const weight = parseFloat($('input[name="weight"]').val());
+
+            if (height && weight) {
+                const bmi = (weight / Math.pow(height / 100, 2)).toFixed(2);
+                $('input[value*="BMI"]').val(bmi);
+            }
+        });
+    });
+    </script>
+</body>
+</html>

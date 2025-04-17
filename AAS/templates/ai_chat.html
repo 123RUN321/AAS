@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI医疗问答 | 主动脉辅助诊断系统</title>
+    <!-- 使用Tailwind CSS的Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 图标 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Markdown解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* 自定义样式 */
+        .chat-container {
+            height: 500px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 #f3f4f6;
+        }
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-track {
+            background: #f3f4f6;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #cbd5e0;
+            border-radius: 3px;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            border-radius: 18px 18px 0 18px;
+            margin-left: auto;
+        }
+        .ai-message {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            border-radius: 18px 18px 18px 0;
+            margin-right: auto;
+        }
+        .typing-indicator:after {
+            content: '...';
+            animation: typing 1.5s infinite;
+            display: inline-block;
+            width: 1em;
+            text-align: left;
+        }
+        @keyframes typing {
+            0% { content: '.'; }
+            33% { content: '..'; }
+            66% { content: '...'; }
+        }
+        /* Markdown内容样式 */
+        .message-markdown h1, .message-markdown h2, .message-markdown h3, .message-markdown h4 {
+            font-weight: bold;
+            margin: 1em 0 0.5em 0;
+        }
+        .message-markdown h1 { font-size: 1.5em; }
+        .message-markdown h2 { font-size: 1.3em; }
+        .message-markdown h3 { font-size: 1.1em; }
+        .message-markdown h4 { font-size: 1em; }
+        .message-markdown strong {
+            font-weight: bold;
+        }
+        .message-markdown em {
+            font-style: italic;
+        }
+        .message-markdown ul, .message-markdown ol {
+            margin-left: 1.5em;
+            margin-bottom: 1em;
+        }
+        .message-markdown li {
+            margin-bottom: 0.5em;
+            list-style-type: disc;
+        }
+        .message-markdown ol li {
+            list-style-type: decimal;
+        }
+        .message-markdown code {
+            background-color: #f0f0f0;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .message-markdown pre {
+            background-color: #f5f5f5;
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 1em 0;
+        }
+        .message-markdown pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .message-markdown blockquote {
+            border-left: 4px solid #ddd;
+            padding-left: 1em;
+            color: #666;
+            margin: 1em 0;
+        }
+        .message-markdown a {
+            color: #3b82f6;
+            text-decoration: underline;
+        }
+        .message-markdown table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        .message-markdown th, .message-markdown td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        .message-markdown th {
+            background-color: #f3f4f6;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+<!-- 隐藏的CSRF Token字段 -->
+<input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+
+<div id="app">
+    <!-- 导航栏 -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <a href="{% url 'home:index' %}" class="flex items-center text-xl font-bold hover:text-blue-200 transition">
+                    主动脉辅助诊断系统
+                </a>
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="{% url 'home:nrrd_viewer' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-upload mr-1"></i>影像上传
+                    </a>
+                    <a href="{% url 'home:index' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-heartbeat mr-1"></i>AI诊断
+                    </a>
+                    <a href="#" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-comments mr-1"></i>AI问答
+                    </a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'home:profile' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-user-circle mr-1"></i>{{ request.user.mobile }}
+                    </a>
+                    <a href="{% url 'users:logout' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i>退出
+                    </a>
+                {% else %}
+                    <a href="{% url 'users:login' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-in-alt mr-1"></i>登录
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区域 -->
+    <div class="content-wrap">
+        <div class="container mx-auto px-4 py-8">
+            <div class="text-center mb-12">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-robot text-blue-600 mr-2"></i>AI医疗问答
+                </h1>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    向专业AI咨询关于主动脉疾病的问题，获取权威解答
+                </p>
+            </div>
+
+            <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+                <div class="p-6">
+                    <!-- 聊天容器 -->
+                    <div id="chatContainer" class="chat-container mb-4 space-y-4 p-2">
+                        <!-- 初始欢迎消息 -->
+                        <div class="ai-message p-4 max-w-[85%]">
+                            <div class="message-markdown">
+                                <p>您好！我是您的AI医疗助手，专注于主动脉疾病的咨询。我可以帮助您了解：</p>
+                                <ul>
+                                    <li>主动脉夹层的症状与诊断</li>
+                                    <li>动脉瘤的治疗方案</li>
+                                    <li>术后康复建议</li>
+                                    <li>预防措施</li>
+                                </ul>
+                                <p>请问您有什么具体问题？</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 输入区域 -->
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="userInput" placeholder="输入您的问题..."
+                               class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                               autocomplete="off">
+                        <button id="sendButton" class="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center justify-center">
+                            <i class="fas fa-paper-plane mr-2"></i>
+                            <span>发送</span>
+                        </button>
+                    </div>
+
+                    <div class="mt-3 text-xs text-gray-500 flex justify-between">
+                        <div>
+                            <i class="fas fa-lightbulb mr-1"></i>提示：可问"主动脉夹层有哪些症状？"
+                        </div>
+                        <div id="charCounter" class="text-gray-400">0/500</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 免责声明 -->
+            <div class="max-w-3xl mx-auto mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700">
+                <p><strong><i class="fas fa-exclamation-triangle mr-2"></i>免责声明：</strong>本AI提供的建议仅供参考，不能替代专业医生的诊断。如有医疗问题，请及时咨询正规医疗机构。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p>Copyright &copy; 2023 主动脉辅助诊断系统. 保留所有权利。</p>
+        </div>
+    </footer>
+</div>
+
+<!-- JavaScript 代码 -->
+<script>
+// 配置marked.js
+marked.setOptions({
+    breaks: true,  // 自动换行
+    gfm: true,     // 支持GitHub风格的Markdown
+    sanitize: true // 清理HTML标签防止XSS
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const chatContainer = document.getElementById('chatContainer');
+    const userInput = document.getElementById('userInput');
+    const sendButton = document.getElementById('sendButton');
+    const charCounter = document.getElementById('charCounter');
+
+    // 获取CSRF Token
+    function getCSRFToken() {
+        const csrfInput = document.getElementById('csrf_token');
+        if (csrfInput) return csrfInput.value;
+
+        const cookieValue = document.cookie.match(/csrftoken=([^;]+)/);
+        return cookieValue ? cookieValue[1] : '';
+    }
+
+    // 添加消息到聊天框
+    function addMessage(role, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `${role}-message p-4 max-w-[85%] flex`;
+
+        // 添加头像
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = `flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center mr-3 mt-1
+                              ${role === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'}`;
+        avatarDiv.innerHTML = role === 'user'
+            ? '<i class="fas fa-user"></i>'
+            : '<i class="fas fa-robot"></i>';
+
+        // 添加消息内容
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-markdown flex-1';
+        contentDiv.innerHTML = marked.parse(content); // 使用marked解析Markdown
+
+        messageDiv.appendChild(avatarDiv);
+        messageDiv.appendChild(contentDiv);
+        chatContainer.appendChild(messageDiv);
+
+        // 滚动到底部
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // 显示"正在输入"指示器
+    function showTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.id = 'typingIndicator';
+        typingDiv.className = 'ai-message p-4 max-w-[85%] flex';
+
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'flex-shrink-0 h-8 w-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center mr-3 mt-1';
+        avatarDiv.innerHTML = '<i class="fas fa-robot"></i>';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'typing-indicator text-gray-500';
+        contentDiv.textContent = '正在思考';
+
+        typingDiv.appendChild(avatarDiv);
+        typingDiv.appendChild(contentDiv);
+        chatContainer.appendChild(typingDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // 隐藏"正在输入"指示器
+    function hideTypingIndicator() {
+        const typingDiv = document.getElementById('typingIndicator');
+        if (typingDiv) typingDiv.remove();
+    }
+
+    // 发送消息到后端
+    async function sendMessage() {
+        const message = userInput.value.trim();
+        if (!message) {
+            userInput.focus();
+            return;
+        }
+
+        // 显示用户消息
+        addMessage('user', message);
+        userInput.value = '';
+        updateCharCounter(0);
+
+        // 显示"正在输入"指示器
+        showTypingIndicator();
+
+        try {
+            const response = await fetch('/api/ai-chat/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: JSON.stringify({
+                    message: message,
+                    timestamp: new Date().toISOString()
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `请求失败: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                addMessage('ai', data.response);
+            } else {
+                throw new Error(data.message || '未知错误');
+            }
+        } catch (error) {
+            console.error('请求失败:', error);
+            let errorMessage = error.message;
+
+            // 更友好的错误提示
+            if (error.message.includes('Failed to fetch')) {
+                errorMessage = '网络连接失败，请检查您的网络设置';
+            } else if (error.message.includes('timeout')) {
+                errorMessage = '请求超时，请稍后再试';
+            }
+
+            addMessage('ai', `抱歉，出现错误: ${errorMessage}`);
+        } finally {
+            hideTypingIndicator();
+            userInput.focus();
+        }
+    }
+
+    // 更新字符计数器
+    function updateCharCounter(length) {
+        charCounter.textContent = `${length}/500`;
+        if (length > 400) {
+            charCounter.className = 'text-yellow-600';
+        } else if (length > 490) {
+            charCounter.className = 'text-red-600';
+        } else {
+            charCounter.className = 'text-gray-400';
+        }
+    }
+
+    // 输入框事件监听
+    userInput.addEventListener('input', function() {
+        updateCharCounter(this.value.length);
+    });
+
+    // 输入框回车事件
+    userInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // 发送按钮点击事件
+    sendButton.addEventListener('click', sendMessage);
+
+    // 初始化字符计数器
+    updateCharCounter(0);
+    userInput.focus();
+});
+</script>
+</body>
+</html>

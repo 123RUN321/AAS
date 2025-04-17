@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>注册 - 主动脉辅助诊断系统</title>
+    <!-- 使用Tailwind CSS的Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 图标 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 添加自定义样式确保页脚固定在底部 */
+        html, body {
+            height: 100%;
+        }
+        #app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .content-wrap {
+            flex: 1;
+        }
+        /* 角色选择卡片样式 */
+        .role-card {
+            transition: all 0.3s ease;
+        }
+        .role-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .role-card.selected {
+            border-color: #3b82f6;
+            background-color: #f0f7ff;
+        }
+        /* 隐藏单选按钮 */
+        .role-radio {
+            position: absolute;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+<div id="app">
+    <!-- 导航栏 -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <a href="{% url 'home:index' %}" class="flex items-center text-xl font-bold">
+                <i class="fas fa-heartbeat mr-2"></i>主动脉辅助诊断系统
+            </a>
+            <a href="{% url 'users:login' %}" class="flex items-center hover:text-blue-200 transition">
+                <i class="fas fa-sign-in-alt mr-1"></i>登录
+            </a>
+        </div>
+    </nav>
+
+    <!-- 注册表单 -->
+    <div class="content-wrap">
+        <div class="container mx-auto px-4 py-8">
+            <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800">
+                        <i class="fas fa-user-plus mr-2 text-blue-600"></i>用户注册
+                    </h2>
+                    <p class="text-gray-500">请选择您的身份并完成注册</p>
+                </div>
+
+                <!-- 角色选择 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- 病人角色 -->
+                    <label class="role-card border-2 rounded-lg p-4 text-center cursor-pointer transition-all"
+                           :class="{'selected': role === 'patient'}">
+                        <input type="radio" name="role" value="patient" v-model="role" class="role-radio" checked>
+                        <div class="text-blue-600 mb-2">
+                            <i class="fas fa-user-injured text-3xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800">病人</h3>
+                        <p class="text-sm text-gray-500 mt-1">注册后可以使用健康监测功能</p>
+                    </label>
+
+                    <!-- 医生角色 -->
+                    <label class="role-card border-2 rounded-lg p-4 text-center cursor-pointer transition-all"
+                           :class="{'selected': role === 'doctor'}">
+                        <input type="radio" name="role" value="doctor" v-model="role" class="role-radio">
+                        <div class="text-blue-600 mb-2">
+                            <i class="fas fa-user-md text-3xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800">医生</h3>
+                        <p class="text-sm text-gray-500 mt-1">注册后可以管理病人和诊断</p>
+                    </label>
+
+                    <!-- 管理员角色 -->
+                    <label class="role-card border-2 rounded-lg p-4 text-center cursor-pointer transition-all"
+                           :class="{'selected': role === 'admin'}">
+                        <input type="radio" name="role" value="admin" v-model="role" class="role-radio">
+                        <div class="text-blue-600 mb-2">
+                            <i class="fas fa-user-shield text-3xl"></i>
+                        </div>
+                        <h3 class="font-semibold text-gray-800">管理员</h3>
+                        <p class="text-sm text-gray-500 mt-1">系统管理员</p>
+                    </label>
+                </div>
+
+                <!-- 注册表单 -->
+                <form class="space-y-4" id="register_form" method="POST" action="{% url 'users:register' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="role" v-model="role">
+                    <!-- 用户名 -->
+                    <div v-if="role === 'admin'">
+                        <label for="id_admin_key" class="block text-gray-700 mb-1">管理员密匙</label>
+                        <input type="password" name="admin_key" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               id="id_admin_key" placeholder="请输入管理员密匙" v-model="admin_key" required>
+                        <small class="text-gray-500 text-sm">请联系系统管理员获取密匙</small>
+                    </div>
+                    <!-- 手机号 -->
+                    <div>
+                        <label for="id_mobile" class="block text-gray-700 mb-1">手机号</label>
+                        <input type="text" name="mobile" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               id="id_mobile" placeholder="请输入11位手机号" v-model="mobile" @blur="check_mobile" required>
+                        <small class="text-red-500 text-sm" v-show="mobile_error">[[mobile_error_message]]</small>
+                    </div>
+
+                    <!-- 密码 -->
+                    <div>
+                        <label for="id_password" class="block text-gray-700 mb-1">密码</label>
+                        <input type="password" name="password" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               id="id_password" placeholder="8-20位字母或数字" v-model="password" @blur="check_password" required>
+                        <small class="text-red-500 text-sm" v-show="password_error">[[password_error_message]]</small>
+                    </div>
+
+                    <!-- 确认密码 -->
+                    <div>
+                        <label for="id_password2" class="block text-gray-700 mb-1">确认密码</label>
+                        <input type="password" name="password2" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                               id="id_password2" placeholder="再次输入密码" v-model="password2" @blur="check_password2" required>
+                        <small class="text-red-500 text-sm" v-show="password2_error">[[password2_error_message]]</small>
+                    </div>
+
+                    <!-- 图片验证码 -->
+                    <div>
+                        <label for="id_image_code" class="block text-gray-700 mb-1">图片验证码</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" name="image_code" class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                   id="id_image_code" placeholder="请输入验证码" v-model="image_code" @blur="check_image_code" required>
+                            <img :src="image_code_url" @click="generate_image_code" alt="验证码" class="w-28 h-10 border rounded cursor-pointer">
+                        </div>
+                        <small class="text-red-500 text-sm" v-show="image_code_error">[[image_code_error_message]]</small>
+                    </div>
+
+                    <!-- 提交按钮 -->
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition duration-200 mt-6">
+                        <i class="fas fa-user-plus mr-2"></i>立即注册
+                    </button>
+                </form>
+
+                <div class="text-center mt-6 text-gray-500">
+                    <p>已有账号？<a href="{% url 'users:login' %}" class="text-blue-600 hover:underline">立即登录</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-6 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>Copyright &copy; 主动脉辅助诊断系统 2025</p>
+        </div>
+    </footer>
+</div>
+
+<!-- JavaScript 文件 -->
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+<script>
+    var vm = new Vue({
+        el: '#app',
+        delimiters: ['[[', ']]'],
+        data: {
+            host: window.location.origin,
+            show_menu: false,
+            role: 'patient', // 默认选中病人
+            admin_key: '',
+            username: '',
+            mobile: '',
+            mobile_error: false,
+            mobile_error_message: '请输入正确的手机号',
+            password: '',
+            password_error: false,
+            password_error_message: '密码必须是8-20位字母或数字',
+            password2: '',
+            password2_error: false,
+            password2_error_message: '两次输入的密码不一致',
+            uuid: '',
+            image_code: '',
+            image_code_error: false,
+            image_code_error_message: '请输入图片验证码',
+            image_code_url: ''
+        },
+        mounted() {
+            this.generate_image_code();
+        },
+        methods: {
+            show_menu_click: function() {
+                this.show_menu = !this.show_menu;
+            },
+            generateUUID: function() {
+                var d = new Date().getTime();
+                if (window.performance && typeof window.performance.now === "function") {
+                    d += performance.now();
+                }
+                var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = (d + Math.random() * 16) % 16 | 0;
+                    d = Math.floor(d / 16);
+                    return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                });
+                return uuid;
+            },
+            generate_image_code: function() {
+                this.uuid = this.generateUUID();
+                this.image_code_url = this.host + "/imagecode/?uuid=" + this.uuid;
+                this.image_code = '';
+                this.image_code_error = false;
+            },
+            check_mobile: function() {
+                var re = /^1[3-9]\d{9}$/;
+                if (re.test(this.mobile)) {
+                    this.mobile_error = false;
+                } else {
+                    this.mobile_error = true;
+                }
+            },
+            check_password: function() {
+                var re = /^[0-9A-Za-z]{8,20}$/;
+                if (re.test(this.password)) {
+                    this.password_error = false;
+                } else {
+                    this.password_error = true;
+                }
+            },
+            check_password2: function() {
+                if (this.password != this.password2) {
+                    this.password2_error = true;
+                } else {
+                    this.password2_error = false;
+                }
+            },
+            check_image_code: function() {
+                if (!this.image_code) {
+                    this.image_code_error = true;
+                } else {
+                    this.image_code_error = false;
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>

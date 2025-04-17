@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上传NRRD文件 - 主动脉辅助诊断系统</title>
+    <!-- 使用Tailwind CSS的Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .hover-effect:hover {
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <!-- 系统Logo/首页 -->
+                <a class="flex items-center text-xl font-bold hover:text-blue-200 transition">
+                    主动脉辅助诊断系统
+                </a>
+
+                <!-- 左侧导航菜单 -->
+                <div class="hidden md:flex items-center space-x-4">
+                    {% if request.user.is_authenticated %}
+                        <a href="{% url 'patient:nrrd_upload' %}" class="flex items-center hover:text-blue-200 transition">
+                            <i class="fas fa-upload mr-1"></i>影像上传
+                        </a>
+                        <a href="{% url 'patient:index' %}" class="flex items-center hover:text-blue-200 transition">
+                            <i class="fas fa-heartbeat mr-1"></i>AI诊断
+                        </a>
+                        <a href="#" class="flex items-center hover:text-blue-200 transition">
+                            <i class="fas fa-history mr-1"></i>历史记录
+                        </a>
+                    {% endif %}
+                    <a href="#" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-question-circle mr-1"></i>帮助中心
+                    </a>
+                </div>
+            </div>
+            <!-- 右侧用户菜单 -->
+            <div class="flex items-center space-x-4">
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'home:profile' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-user-circle mr-1"></i>{{ request.user.mobile }}
+                    </a>
+                    <a href="{% url 'users:logout' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i>退出
+                    </a>
+                {% else %}
+                    <a href="{% url 'users:login' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-in-alt mr-1"></i>登录
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="container mx-auto p-8">
+        <div class="max-w-3xl mx-auto">
+            <h1 class="text-2xl font-bold mb-6">上传NRRD医学影像</h1>
+            
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="p-6">
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label class="block text-gray-700 font-medium mb-2">选择NRRD文件</label>
+                            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                                <input type="file" name="file" accept=".nrrd" class="hidden" id="fileInput">
+                                <label for="fileInput" class="cursor-pointer">
+                                    <i class="fas fa-cloud-upload-alt text-4xl text-blue-500 mb-3"></i>
+                                    <p class="text-gray-600">点击或拖拽NRRD文件到此处</p>
+                                    <p class="text-sm text-gray-500 mt-1">支持.nrrd格式的医学影像文件</p>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg hover-effect">
+                                <i class="fas fa-upload mr-2"></i>开始上传
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="uploadStatus" class="mt-6"></div>
+        </div>
+    </div>
+
+    <script>
+        // 文件选择显示
+        const fileInput = document.getElementById('fileInput');
+        const uploadForm = document.getElementById('uploadForm');
+        const statusDiv = document.getElementById('uploadStatus');
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const fileName = e.target.files[0].name;
+                statusDiv.innerHTML = `
+                    <div class="bg-blue-50 p-3 rounded-lg">
+                        <p class="text-blue-800">已选择文件: <span class="font-medium">${fileName}</span></p>
+                    </div>
+                `;
+            }
+        });
+
+        // 上传处理
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!fileInput.files.length) {
+                statusDiv.innerHTML = `
+                    <div class="bg-red-50 p-3 rounded-lg">
+                        <p class="text-red-600">请先选择文件</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const formData = new FormData(uploadForm);
+            
+            try {
+                statusDiv.innerHTML = `
+                    <div class="bg-blue-50 p-3 rounded-lg flex items-center">
+                        <i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>
+                        <p class="text-blue-800">上传中，请稍候...</p>
+                    </div>
+                `;
+                
+                const response = await fetch('{% url "home:nrrd_upload" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                    },
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = `
+                        <div class="bg-green-50 p-3 rounded-lg">
+                            <p class="text-green-600">上传成功！正在跳转到查看页面...</p>
+                        </div>
+                    `;
+                    window.location.href = `{% url 'home:nrrd_view' 0 %}`.replace('0', data.image_id);
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="bg-red-50 p-3 rounded-lg">
+                            <p class="text-red-600">错误: ${data.error || '上传失败'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <div class="bg-red-50 p-3 rounded-lg">
+                        <p class="text-red-600">网络错误: ${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+
+        // 拖拽上传功能
+        const dropArea = uploadForm.querySelector('.border-dashed');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('border-blue-400', 'bg-blue-50');
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('border-blue-400', 'bg-blue-50');
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            fileInput.files = files;
+            const event = new Event('change');
+            fileInput.dispatchEvent(event);
+        }
+    </script>
+</body>
+</html>

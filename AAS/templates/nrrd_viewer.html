@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NRRD影像查看器 | 主动脉辅助诊断系统</title>
+    <!-- 使用Tailwind CSS的Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 图标 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js 和 AMI.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ami.js@0.0.5/dist/ami.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+        }
+        #app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .content-wrap {
+            flex: 1;
+        }
+        .upload-area {
+            transition: all 0.3s ease;
+        }
+        .upload-area.drag-over {
+            border-color: #3b82f6;
+            background-color: #f0f7ff;
+        }
+        .viewer-container {
+            transition: all 0.3s ease;
+            height: 500px;
+            position: relative;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none;
+        }
+        .slice-preview {
+            transition: all 0.3s ease;
+        }
+        .slice-preview:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+<!-- 隐藏的CSRF Token字段 -->
+<input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+
+<div id="app">
+    <!-- 导航栏 -->
+    <nav class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-6">
+                <a href="{% url 'home:index' %}" class="flex items-center text-xl font-bold hover:text-blue-200 transition">
+                    主动脉辅助诊断系统
+                </a>
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="{% url 'home:nrrd_viewer' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-upload mr-1"></i>影像上传
+                    </a>
+                    <a href="{% url 'home:index' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-heartbeat mr-1"></i>AI诊断
+                    </a>
+                    <a href="{% url 'home:ai_chat' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-comments mr-1"></i>AI问答
+                    </a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                {% if request.user.is_authenticated %}
+                    <a href="{% url 'home:profile' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-user-circle mr-1"></i>{{ request.user.mobile }}
+                    </a>
+                    <a href="{% url 'users:logout' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i>退出
+                    </a>
+                {% else %}
+                    <a href="{% url 'users:login' %}" class="flex items-center hover:text-blue-200 transition">
+                        <i class="fas fa-sign-in-alt mr-1"></i>登录
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区域 -->
+    <div class="content-wrap">
+        <div class="container mx-auto px-4 py-8">
+            <!-- 标题和简介 -->
+            <div class="text-center mb-12">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-image text-blue-600 mr-2"></i>NRRD影像查看器
+                </h1>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    上传并查看您的医学影像(.nrrd格式)，支持2D切片和3D体积渲染
+                </p>
+            </div>
+
+            <!-- 上传区域 -->
+            <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden mb-8">
+                <div class="p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-cloud-upload-alt text-blue-500 mr-2"></i>上传NRRD影像
+                    </h2>
+
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 transition-colors duration-300"
+                         id="uploadArea">
+                        <input type="file" id="fileInput" class="hidden" accept=".nrrd,.NHDR">
+                        <div class="flex flex-col items-center justify-center space-y-3">
+                            <i class="fas fa-file-medical text-4xl text-blue-500"></i>
+                            <p class="text-lg font-medium text-gray-700">拖放.nrrd文件到此处或点击上传</p>
+                            <p class="text-sm text-gray-500">支持.nrrd格式的医学影像文件</p>
+                            <div id="fileInfo" class="text-sm text-gray-600 mt-2"></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex justify-center">
+                        <button id="uploadBtn" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition duration-200 flex items-center">
+                            <i class="fas fa-upload mr-2"></i>
+                            <span>上传文件</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 查看器区域 -->
+            <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+                <div class="p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-eye text-blue-500 mr-2"></i>影像查看器
+                    </h2>
+
+                    <!-- 查看器选项卡 -->
+                    <div class="flex border-b border-gray-200 mb-4">
+                        <button class="viewer-tab px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600" data-mode="2d">
+                            <i class="fas fa-layer-group mr-1"></i> 2D切片
+                        </button>
+                        <button class="viewer-tab px-4 py-2 font-medium text-gray-500 hover:text-blue-600" data-mode="3d">
+                            <i class="fas fa-cube mr-1"></i> 3D体积
+                        </button>
+                    </div>
+
+                    <!-- 切片预览 -->
+                    <div id="slicePreviews" class="flex justify-center space-x-4 mb-4 hidden">
+                        <div class="slice-preview text-center">
+                            <h3 class="text-sm font-medium text-gray-700 mb-1">冠状面</h3>
+                            <img id="coronalPreview" class="w-32 h-32 object-contain border border-gray-200 rounded">
+                        </div>
+                        <div class="slice-preview text-center">
+                            <h3 class="text-sm font-medium text-gray-700 mb-1">矢状面</h3>
+                            <img id="sagittalPreview" class="w-32 h-32 object-contain border border-gray-200 rounded">
+                        </div>
+                        <div class="slice-preview text-center">
+                            <h3 class="text-sm font-medium text-gray-700 mb-1">横断面</h3>
+                            <img id="axialPreview" class="w-32 h-32 object-contain border border-gray-200 rounded">
+                        </div>
+                    </div>
+
+                    <!-- 2D查看器 -->
+                    <div id="2dViewer" class="viewer-container">
+                        <img id="sliceViewer" class="w-full h-full object-contain" style="display: none;">
+                        <div class="viewer-controls flex justify-center mt-4 hidden">
+                            <div class="flex items-center space-x-4 bg-gray-100 px-4 py-2 rounded-lg">
+                                <button id="prevSlice" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span id="sliceInfo" class="text-sm font-medium">Slice: 0/0</span>
+                                <button id="nextSlice" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3D查看器 -->
+                    <div id="3dViewer" class="viewer-container" style="display: none;">
+                        <div id="viewerCanvas"></div>
+                        <div id="loading">Loading 3D viewer...</div>
+                    </div>
+
+                    <!-- 影像信息 -->
+                    <div id="imageInfo" class="mt-4 p-4 bg-gray-50 rounded-lg hidden">
+                        <h3 class="font-medium text-gray-800 mb-2">
+                            <i class="fas fa-info-circle text-blue-500 mr-1"></i>影像信息
+                        </h3>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div><span class="font-medium">文件名:</span> <span id="infoFilename">-</span></div>
+                            <div><span class="font-medium">尺寸:</span> <span id="infoDimensions">-</span></div>
+                            <div><span class="font-medium">上传时间:</span> <span id="infoUploadTime">-</span></div>
+                            <div><span class="font-medium">类型:</span> <span id="infoType">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p>Copyright &copy; Ruanhua 2025</p>
+        </div>
+    </footer>
+</div>
+
+<script>
+    // 全局变量
+    let currentImage = null;
+    let currentSlice = 0;
+    let totalSlices = 0;
+    let renderer, scene, camera, controls, volume;
+
+    // DOM加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化事件监听
+        initEventListeners();
+    });
+
+    // 初始化所有事件监听
+    function initEventListeners() {
+        // 文件上传相关
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+        uploadBtn.addEventListener('click', uploadNrrd);
+
+        // 查看器控制相关
+        document.getElementById('prevSlice').addEventListener('click', () => changeSlice(-1));
+        document.getElementById('nextSlice').addEventListener('click', () => changeSlice(1));
+
+        // 选项卡切换
+        document.querySelectorAll('.viewer-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                switchViewer(this.dataset.mode);
+
+                // 更新选项卡样式
+                document.querySelectorAll('.viewer-tab').forEach(t => {
+                    t.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+                    t.classList.add('text-gray-500', 'hover:text-blue-600');
+                });
+
+                this.classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                this.classList.remove('text-gray-500', 'hover:text-blue-600');
+            });
+        });
+    }
+
+    // 文件拖放处理
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.add('border-blue-400', 'bg-blue-50');
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+    }
+
+    function handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (file) handleFile(file);
+    }
+
+    function handleFile(file) {
+        if (!file.name.toLowerCase().endsWith('.nrrd') && !file.name.toLowerCase().endsWith('.nhdr')) {
+            document.getElementById('fileInfo').textContent = '请选择.nrrd或.nhdr格式的文件';
+            document.getElementById('fileInfo').className = 'text-sm text-red-600 mt-2';
+            return;
+        }
+
+        document.getElementById('fileInfo').textContent = `已选择: ${file.name} (${formatFileSize(file.size)})`;
+        document.getElementById('fileInfo').className = 'text-sm text-green-600 mt-2';
+        currentImage = { file, name: file.name };
+    }
+
+    // 文件上传
+    function uploadNrrd() {
+        if (!currentImage || !currentImage.file) {
+            document.getElementById('fileInfo').textContent = '请先选择文件';
+            document.getElementById('fileInfo').className = 'text-sm text-red-600 mt-2';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('nrrd_file', currentImage.file);
+        formData.append('name', currentImage.name || currentImage.file.name);
+        formData.append('csrfmiddlewaretoken', document.getElementById('csrf_token').value);
+
+        document.getElementById('fileInfo').textContent = '上传中...';
+        document.getElementById('fileInfo').className = 'text-sm text-blue-600 mt-2';
+
+        fetch('/upload/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('fileInfo').textContent = '上传成功!';
+                document.getElementById('fileInfo').className = 'text-sm text-green-600 mt-2';
+
+                // 显示上传的图像
+                displayImage(data.id, data.name, data.preview_data, data.image_url, data.dimensions, data.previews);
+            } else {
+                document.getElementById('fileInfo').textContent = `上传失败: ${data.message}`;
+                document.getElementById('fileInfo').className = 'text-sm text-red-600 mt-2';
+            }
+        })
+        .catch(error => {
+            document.getElementById('fileInfo').textContent = `上传错误: ${error.message}`;
+            document.getElementById('fileInfo').className = 'text-sm text-red-600 mt-2';
+        });
+    }
+
+    // 显示选中的图像
+    function displayImage(id, name, previewData, imageUrl, dimensions, previews) {
+        currentImage = { id, name, imageUrl };
+
+        // 更新2D查看器
+        const imgElement = document.getElementById('sliceViewer');
+        imgElement.src = previewData;
+        imgElement.alt = name;
+        imgElement.style.display = 'block';
+
+        // 显示切片预览
+        if (previews) {
+            document.getElementById('slicePreviews').classList.remove('hidden');
+            if (previews.coronal) document.getElementById('coronalPreview').src = previews.coronal;
+            if (previews.sagittal) document.getElementById('sagittalPreview').src = previews.sagittal;
+            if (previews.axial) document.getElementById('axialPreview').src = previews.axial;
+        } else {
+            document.getElementById('slicePreviews').classList.add('hidden');
+        }
+
+        // 更新影像信息
+        document.getElementById('imageInfo').classList.remove('hidden');
+        document.getElementById('infoFilename').textContent = name;
+        document.getElementById('infoDimensions').textContent = dimensions ? dimensions.join(' × ') : '未知';
+        document.getElementById('infoUploadTime').textContent = new Date().toLocaleString();
+        document.getElementById('infoType').textContent = dimensions && dimensions.length === 3 ? '3D体积' : '2D图像';
+
+        // 如果是3D模式，初始化3D查看器
+        if (document.getElementById('3dViewer').style.display === 'block') {
+            init3DViewer(imageUrl);
+        }
+    }
+
+    // 切换2D/3D查看器
+    function switchViewer(mode) {
+        document.getElementById('2dViewer').style.display = mode === '2d' ? 'block' : 'none';
+        document.getElementById('3dViewer').style.display = mode === '3d' ? 'block' : 'none';
+
+        if (mode === '3d' && currentImage && currentImage.imageUrl) {
+            init3DViewer(currentImage.imageUrl);
+        }
+    }
+
+    // 初始化3D查看器
+    function init3DViewer(nrrdUrl) {
+        const container = document.getElementById('viewerCanvas');
+        const loadingElement = document.getElementById('loading');
+
+        // 显示加载状态
+        loadingElement.style.display = 'block';
+        loadingElement.textContent = 'Loading 3D viewer...';
+
+        // 清除旧场景
+        if (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        // 创建Three.js场景
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, container.clientWidth / 500, 0.1, 1000);
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, 500);
+        container.appendChild(renderer.domElement);
+
+        // 添加光源
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(0.5, 0.5, 1);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x333333));
+
+        // 设置相机位置
+        camera.position.z = 2;
+
+        // 添加轨道控制
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+
+        // 使用AMI加载器
+        const loader = new AMI.VolumeLoader(container);
+
+        // 添加错误处理
+        loader.onError = function(e) {
+            console.error('Loader error:', e);
+            loadingElement.textContent = '加载失败: ' + (e.message || '未知错误');
+        };
+
+        // 显示加载进度
+        loader.onProgress = function(progress) {
+            loadingElement.textContent = `加载中... ${Math.round(progress * 100)}%`;
+        };
+
+        // 开始加载
+        loader.load(nrrdUrl)
+            .then(function() {
+                if (!loader.data || loader.data.length === 0) {
+                    throw new Error('No volume data loaded');
+                }
+
+                // 处理加载的数据
+                const series = loader.data[0].mergeSeries(loader.data)[0];
+                volume = AMI.helpers.fusedVolume(series);
+
+                // 创建3D堆栈帮助器
+                const stackHelper = new AMI.StackHelper(volume);
+                stackHelper.bbox.visible = true;
+                stackHelper.border.color = 0x0088ff;
+                scene.add(stackHelper);
+
+                // 调整相机到物体中心
+                const centerLPS = volume.center;
+                camera.lookAt(centerLPS.x, centerLPS.y, centerLPS.z);
+                camera.position.x = centerLPS.x + 0.3;
+                camera.position.y = centerLPS.y + 0.3;
+                camera.position.z = centerLPS.z + 0.3;
+                controls.update();
+
+                // 隐藏加载提示
+                loadingElement.style.display = 'none';
+
+                // 开始渲染循环
+                animate();
+            })
+            .catch(function(error) {
+                console.error('3D Viewer Error:', error);
+                loadingElement.textContent = '3D查看器初始化失败: ' + error.message;
+            });
+    }
+
+    // 3D动画循环
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    // 改变切片
+    function changeSlice(delta) {
+        // 这里需要实现切片切换逻辑
+        // 在实际应用中，您可能需要从服务器获取不同的切片
+        // 或者如果整个体积数据已加载，可以在前端处理
+
+        console.log(`Changing slice by ${delta}`);
+        // 示例: currentSlice = Math.max(0, Math.min(totalSlices-1, currentSlice + delta));
+        // updateSliceDisplay();
+    }
+
+    // 辅助函数: 格式化文件大小
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 辅助函数: 获取Cookie
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+</body>
+</html>
